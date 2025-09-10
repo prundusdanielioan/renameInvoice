@@ -13,6 +13,8 @@ from pathlib import Path
 import PyPDF2
 from typing import List, Optional, Dict, Tuple
 from datetime import datetime
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 
 class InvoiceDataExtractor:
@@ -138,6 +140,60 @@ class InvoiceDataExtractor:
         
         return None
     
+    def extract_cpv_code(self, text: str) -> Optional[str]:
+        """Extrage codul CPV din text"""
+        patterns = [
+            r'Cod\s+CPV\s+articol\s+pentru\s+linia\s+\d+\s*:\s*([A-Z0-9]+)',
+            r'Cod\s+CPV\s*:\s*([A-Z0-9]+)',
+            r'CPV\s+Code\s*:\s*([A-Z0-9]+)',
+            r'CPV\s*:\s*([A-Z0-9]+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    def extract_nc8_code(self, text: str) -> Optional[str]:
+        """Extrage codul NC8 din text"""
+        patterns = [
+            r'Cod\s+NC8\s+articol\s+pentru\s+linia\s+\d+\s*:\s*([A-Z0-9]+)',
+            r'Cod\s+NC8\s*:\s*([A-Z0-9]+)',
+            r'NC8\s+Code\s*:\s*([A-Z0-9]+)',
+            r'NC8\s*:\s*([A-Z0-9]+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    def extract_product_name(self, text: str) -> Optional[str]:
+        """Extrage denumirea produsului din text"""
+        patterns = [
+            # Caută în tabelul cu "Nume articol/Descriere articol"
+            r'Linia\s+1\s+([A-Za-z0-9\s\.\-&]+?)(?=\n|$)',
+            r'Nume\s+articol/Descriere\s+articol\s*\n\s*([A-Za-z0-9\s\.\-&]+?)(?=\n|$)',
+            # Caută după "Linia 1" urmat de denumirea produsului
+            r'Linia\s+1\s*\n\s*([A-Za-z0-9\s\.\-&]+?)(?=\n|$)',
+            # Caută în contextul tabelului de articole
+            r'1\s+([A-Za-z0-9\s\.\-&]+?)(?=\n|$)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+            if match:
+                product_name = match.group(1).strip()
+                # Filtrează numele prea scurte sau care conțin doar cifre
+                if len(product_name) > 2 and not product_name.isdigit():
+                    return product_name
+        
+        return None
+    
     def extract_invoice_data(self, text: str) -> Dict[str, Optional[str]]:
         """
         Extrage toate datele din text
@@ -151,6 +207,9 @@ class InvoiceDataExtractor:
             'due_date': self.extract_date(text, 'Data scadenta'),
             'total_payment': self.extract_total_payment(text),
             'total_vat': self.extract_total_vat(text),
+            'cpv_code': self.extract_cpv_code(text),
+            'nc8_code': self.extract_nc8_code(text),
+            'product_name': self.extract_product_name(text),
         }
         
         return data
@@ -272,34 +331,95 @@ class InvoiceDataExtractor:
             # Generează noul nume
             new_path = self.generate_new_filename(pdf_path, data)
             
-            # Verifică dacă fișierul de destinație există deja
-            if new_path.exists() and new_path != pdf_path:
-                return False, f"Fișierul {new_path.name} există deja", data
+            # Verifică dacă fișierul de destinație este același cu cel sursă
+            if new_path == pdf_path:
+                print(f"  ℹ️  Fișierul {pdf_path.name} are deja numele corect")
+                return True, f"Fișierul are deja numele corect: {pdf_path.name}", data
             
-            # Creează o copie cu noul nume
+            # Verifică dacă fișierul de destinație există deja
+            if new_path.exists():
+                print(f"  ⚠️  Fișierul {new_path.name} există deja - îl recreez")
+            
+            # Creează o copie cu noul nume (suprascrie dacă există)
             if not self.dry_run:
                 shutil.copy2(pdf_path, new_path)
-                print(f"  Copiat în: {new_path.name}")
+                if new_path.exists():
+                    print(f"  ✅ Recreeat: {new_path.name}")
+                else:
+                    print(f"  ✅ Copiat în: {new_path.name}")
             else:
-                print(f"  [DRY RUN] Ar fi copiat în: {new_path.name}")
+                if new_path.exists():
+                    print(f"  [DRY RUN] Ar recreea: {new_path.name}")
+                else:
+                    print(f"  [DRY RUN] Ar copia în: {new_path.name}")
             
             return True, f"Succes: copiat în {new_path.name}", data
             
         except Exception as e:
             return False, f"Eroare: {str(e)}", {}
     
+    def is_original_file(self, filename: str) -> bool:
+        """
+        Verifică dacă fișierul este original (cu nume numeric) sau creat de program
+        
+        Args:
+            filename: Numele fișierului
+            
+        Returns:
+            True dacă fișierul este original și trebuie procesat
+        """
+        # Elimină extensia
+        name_without_ext = filename.replace('.pdf', '')
+        
+        # Verifică dacă numele conține doar cifre și eventual # la sfârșit
+        if re.match(r'^\d+#?$', name_without_ext):
+            return True
+        
+        # Verifică dacă numele conține caractere tipice de fișiere create de program
+        # (conține underscore, date, sau cuvinte descriptive)
+        if '_' in name_without_ext or re.search(r'\d{4}-\d{2}-\d{2}', name_without_ext):
+            return False
+        
+        # Dacă nu se potrivește cu pattern-ul numeric, probabil este creat de program
+        return False
+    
     def process_folder(self) -> None:
         """Procesează toate PDF-urile din folder"""
-        pdf_files = list(self.input_folder.glob("*.pdf"))
+        all_pdf_files = list(self.input_folder.glob("*.pdf"))
         
-        if not pdf_files:
+        if not all_pdf_files:
             print("Nu s-au găsit fișiere PDF în folder")
             return
         
-        print(f"Găsite {len(pdf_files)} fișiere PDF")
+        # Filtrează doar fișierele originale (cu nume numeric)
+        pdf_files = [f for f in all_pdf_files if self.is_original_file(f.name)]
+        ignored_files = [f for f in all_pdf_files if not self.is_original_file(f.name)]
+        
+        print(f"Găsite {len(all_pdf_files)} fișiere PDF în total")
+        print(f"Fișiere originale de procesat: {len(pdf_files)}")
+        print(f"Fișiere ignorate (create de program): {len(ignored_files)}")
         print(f"Folder: {self.input_folder}")
+        
+        if ignored_files:
+            print("\nFișiere ignorate (create de program):")
+            for i, pdf_file in enumerate(ignored_files[:3]):  # Afișează primele 3
+                print(f"  - {pdf_file.name}")
+            if len(ignored_files) > 3:
+                print(f"  ... și încă {len(ignored_files) - 3} fișiere")
+        
+        if not pdf_files:
+            print("\n❌ Nu s-au găsit fișiere originale de procesat!")
+            print("💡 Fișierele originale trebuie să aibă nume numerice (ex: 5532528720#)")
+            return
+        
+        print(f"\nFișiere originale de procesat:")
+        for i, pdf_file in enumerate(pdf_files[:5]):  # Afișează primele 5
+            print(f"  {i+1}. {pdf_file.name}")
+        if len(pdf_files) > 5:
+            print(f"  ... și încă {len(pdf_files) - 5} fișiere")
+        
         if self.dry_run:
-            print("*** MOD DRY RUN - Nu se vor copia fișierele ***")
+            print("\n*** MOD DRY RUN - Nu se vor copia fișierele ***")
         print("-" * 50)
         
         for pdf_file in pdf_files:
@@ -337,6 +457,93 @@ class InvoiceDataExtractor:
                 f.write("-" * 30 + "\n\n")
         
         print(f"\nDatele au fost salvate în: {output_path}")
+    
+    def save_to_excel(self, output_file: str = "facturi_extrase.xlsx") -> None:
+        """Salvează datele extrase într-un fișier Excel"""
+        # Dacă nu este cale absolută, salvează în folderul de procesare
+        if not Path(output_file).is_absolute():
+            output_path = self.input_folder / output_file
+        else:
+            output_path = Path(output_file)
+        
+        # Creează workbook-ul
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Facturi Extrase"
+        
+        # Definește stilurile
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Definește header-urile
+        headers = [
+            "Fișier Original",
+            "Nume Companie", 
+            "Data Emitere",
+            "Data Scadenta",
+            "Total Plata",
+            "Total TVA",
+            "Denumire Produs",
+            "Cod CPV",
+            "Cod NC8",
+            "Status",
+            "Fișier Nou"
+        ]
+        
+        # Adaugă header-urile
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+        
+        # Adaugă datele
+        for row, (filename, message, data) in enumerate(self.processed_files, 2):
+            ws.cell(row=row, column=1, value=filename)
+            ws.cell(row=row, column=2, value=data.get('company_name', 'N/A'))
+            ws.cell(row=row, column=3, value=data.get('issue_date', 'N/A'))
+            ws.cell(row=row, column=4, value=data.get('due_date', 'N/A'))
+            ws.cell(row=row, column=5, value=data.get('total_payment', 'N/A'))
+            ws.cell(row=row, column=6, value=data.get('total_vat', 'N/A'))
+            ws.cell(row=row, column=7, value=data.get('product_name', 'N/A'))
+            ws.cell(row=row, column=8, value=data.get('cpv_code', 'N/A'))
+            ws.cell(row=row, column=9, value=data.get('nc8_code', 'N/A'))
+            ws.cell(row=row, column=10, value="Succes")
+            ws.cell(row=row, column=11, value=message.replace("Succes: copiat în ", ""))
+        
+        # Adaugă erorile
+        for row, (filename, error) in enumerate(self.errors, len(self.processed_files) + 2):
+            ws.cell(row=row, column=1, value=filename)
+            ws.cell(row=row, column=2, value="N/A")
+            ws.cell(row=row, column=3, value="N/A")
+            ws.cell(row=row, column=4, value="N/A")
+            ws.cell(row=row, column=5, value="N/A")
+            ws.cell(row=row, column=6, value="N/A")
+            ws.cell(row=row, column=7, value="N/A")
+            ws.cell(row=row, column=8, value="N/A")
+            ws.cell(row=row, column=9, value="N/A")
+            ws.cell(row=row, column=10, value="Eroare")
+            ws.cell(row=row, column=11, value=error)
+        
+        # Ajustează lățimea coloanelor
+        column_widths = [25, 30, 15, 15, 15, 15, 25, 12, 12, 15, 30]
+        for col, width in enumerate(column_widths, 1):
+            ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = width
+        
+        # Salvează fișierul
+        wb.save(output_path)
+        print(f"\nDatele au fost salvate în Excel: {output_path}")
+        
+        # Afișează statistici
+        total_files = len(self.processed_files) + len(self.errors)
+        success_rate = (len(self.processed_files) / total_files * 100) if total_files > 0 else 0
+        
+        print(f"Statistici:")
+        print(f"  Total fișiere: {total_files}")
+        print(f"  Procesate cu succes: {len(self.processed_files)}")
+        print(f"  Erori: {len(self.errors)}")
+        print(f"  Rata de succes: {success_rate:.1f}%")
 
 
 def main():
@@ -355,12 +562,18 @@ Exemple de utilizare:
 3. Salvează datele extrase într-un fișier:
    python invoice_data_extractor.py /path/to/folder --save data.txt
 
+4. Salvează datele extrase în Excel:
+   python invoice_data_extractor.py /path/to/folder --excel facturi.xlsx
+
 Date extrase:
 - Numele companiei (după labelul "Nume")
 - Data emitere (după labelul "Data emitere")
 - Data scadenta (după labelul "Data scadenta")
 - Total plata (după labelul "TOTAL PLATA")
 - Total TVA (după labelul "TOTAL TVA")
+- Denumirea produsului (din coloana "Nume articol/Descriere articol")
+- Cod CPV (după "Cod CPV articol pentru linia X")
+- Cod NC8 (după "Cod NC8 articol pentru linia X")
 
 Format nume fișier: [Nume_Companie]_[Data]_TOTAL_[Valoare].pdf
         """
@@ -382,6 +595,11 @@ Format nume fișier: [Nume_Companie]_[Data]_TOTAL_[Valoare].pdf
         help="Salvează datele extrase în fișierul specificat"
     )
     
+    parser.add_argument(
+        "--excel", "-e",
+        help="Salvează datele extrase în fișierul Excel specificat"
+    )
+    
     args = parser.parse_args()
     
     try:
@@ -390,6 +608,9 @@ Format nume fișier: [Nume_Companie]_[Data]_TOTAL_[Valoare].pdf
         
         if args.save:
             extractor.save_extracted_data(args.save)
+        
+        if args.excel:
+            extractor.save_to_excel(args.excel)
             
     except Exception as e:
         print(f"Eroare: {e}")

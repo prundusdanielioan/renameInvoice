@@ -23,6 +23,9 @@ show_help() {
     echo "  • Data scadenta (după labelul 'Data scadenta')"
     echo "  • Total plata (după labelul 'TOTAL PLATA')"
     echo "  • Total TVA (după labelul 'TOTAL TVA')"
+    echo "  • Denumirea produsului (din coloana 'Nume articol/Descriere articol')"
+    echo "  • Cod CPV (după 'Cod CPV articol pentru linia X')"
+    echo "  • Cod NC8 (după 'Cod NC8 articol pentru linia X')"
     echo ""
     echo -e "${YELLOW}Format nume fișier:${NC}"
     echo "  [Nume_Companie]_[Data]_TOTAL_[Valoare].pdf"
@@ -33,12 +36,14 @@ show_help() {
     echo -e "${YELLOW}Opțiuni:${NC}"
     echo "  --dry-run, -d    Testează fără să copieze fișierele"
     echo "  --save, -s       Salvează datele extrase în fișier"
+    echo "  --excel, -e      Salvează datele extrase în fișier Excel"
     echo "  --help, -h       Afișează acest help"
     echo ""
     echo -e "${YELLOW}Exemple:${NC}"
     echo "  $0 /path/to/folder                    # Procesează toate PDF-urile"
     echo "  $0 /path/to/folder --dry-run          # Testează fără copiere"
     echo "  $0 /path/to/folder --save data.txt    # Salvează datele extrase"
+    echo "  $0 /path/to/folder --excel facturi.xlsx # Salvează în Excel"
     echo ""
 }
 
@@ -116,6 +121,15 @@ main() {
                     shift
                 else
                     echo -e "${RED}Eroare: --save necesită un nume de fișier${NC}"
+                    exit 1
+                fi
+                ;;
+            --excel|-e)
+                if [ -n "$2" ]; then
+                    CMD="$CMD --excel \"$2\""
+                    shift
+                else
+                    echo -e "${RED}Eroare: --excel necesită un nume de fișier${NC}"
                     exit 1
                 fi
                 ;;

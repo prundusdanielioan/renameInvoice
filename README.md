@@ -1,118 +1,181 @@
-# PDF Renamer
+# Invoice Data Extractor
 
-Program Python pentru redenumirea automată a fișierelor PDF pe baza conținutului lor.
+Program pentru extragerea automată a datelor din facturi PDF și exportul lor în Excel.
 
-## Funcționalități
-
-- Citește PDF-uri dintr-un folder specificat
-- Extrage text din PDF-uri folosind două biblioteci (PyMuPDF și PyPDF2)
-- Găsește automat numere de factură în text
-- Redenumește fișierele în formatul `FACTURA_[numar].pdf`
-- Suportă pattern-uri regex personalizate
-- Mod dry-run pentru testare fără redenumire
-
-## Instalare
-
-1. Asigură-te că ai Python 3.7+ instalat
-2. Instalează dependențele:
+## 🚀 Instalare Rapidă
 
 ```bash
+# Clonează sau descarcă proiectul
+cd /path/to/renameInvoice
+
+# Rulează scriptul de instalare
+./install.sh
+```
+
+## 📋 Date Extrase
+
+Programul extrage următoarele informații din facturi PDF:
+
+- **Numele companiei** (după labelul "Nume")
+- **Data emitere** (după labelul "Data emitere")
+- **Data scadenta** (după labelul "Data scadenta")
+- **Total plata** (după labelul "TOTAL PLATA")
+- **Total TVA** (după labelul "TOTAL TVA")
+- **Denumirea produsului** (din coloana "Nume articol/Descriere articol")
+- **Cod CPV** (după "Cod CPV articol pentru linia X")
+- **Cod NC8** (după "Cod NC8 articol pentru linia X")
+
+## 💻 Utilizare
+
+După instalare, poți rula programul din **orice folder**:
+
+### Comenzi de bază
+
+```bash
+# Afișează ajutorul
+invoice-extractor --help
+
+# Procesează toate PDF-urile dintr-un folder
+invoice-extractor /path/to/folder
+
+# Testează fără să copieze fișierele (dry run)
+invoice-extractor /path/to/folder --dry-run
+
+# Exportă datele în Excel
+invoice-extractor /path/to/folder --excel facturi.xlsx
+
+# Salvează datele extrase într-un fișier text
+invoice-extractor /path/to/folder --save data.txt
+```
+
+### Exemple practice
+
+```bash
+# Procesează PDF-urile din folderul curent
+invoice-extractor .
+
+# Procesează PDF-urile din Desktop
+invoice-extractor ~/Desktop
+
+# Exportă în Excel cu nume personalizat
+invoice-extractor ~/Documents/facturi --excel raport_facturi.xlsx
+
+# Testează fără să modifice fișierele
+invoice-extractor ~/Downloads --dry-run --excel test.xlsx
+```
+
+## 📊 Format Excel
+
+Fișierul Excel generat conține următoarele coloane:
+
+| Coloană | Descriere |
+|---------|-----------|
+| Fișier Original | Numele fișierului PDF original |
+| Nume Companie | Numele companiei din factură |
+| Data Emitere | Data emiterii facturii |
+| Data Scadenta | Data scadenței |
+| Total Plata | Suma totală de plată |
+| Total TVA | Valoarea TVA |
+| Denumire Produs | Denumirea produsului |
+| Cod CPV | Codul CPV (ex: H87, LTR) |
+| Cod NC8 | Codul NC8 (ex: H87, LTR) |
+| Status | Succes/Eroare |
+| Fișier Nou | Numele noului fișier creat |
+
+## 🔧 Instalare Manuală
+
+Dacă preferi să instalezi manual:
+
+```bash
+# 1. Creează mediul virtual
+python3 -m venv venv
+
+# 2. Activează mediul virtual
+source venv/bin/activate
+
+# 3. Instalează dependențele
+pip install -r requirements.txt
+
+# 4. Adaugă alias-ul în ~/.zshrc
+echo 'alias invoice-extractor="/path/to/renameInvoice/invoice_extractor_wrapper.sh"' >> ~/.zshrc
+
+# 5. Încarcă configurația
+source ~/.zshrc
+```
+
+## 📁 Structura Proiectului
+
+```
+renameInvoice/
+├── invoice_data_extractor.py      # Script principal Python
+├── invoice_extractor_wrapper.sh   # Wrapper bash
+├── install.sh                     # Script de instalare
+├── requirements.txt               # Dependențe Python
+├── README.md                      # Această documentație
+└── venv/                         # Mediu virtual Python
+```
+
+## 🛠️ Dependențe
+
+- **Python 3.7+**
+- **PyPDF2** - pentru extragerea textului din PDF
+- **openpyxl** - pentru exportul în Excel
+
+## ❓ Troubleshooting
+
+### Programul nu funcționează din alte foldere
+
+```bash
+# Verifică dacă alias-ul este setat
+grep "invoice-extractor" ~/.zshrc
+
+# Dacă nu există, adaugă-l manual
+echo 'alias invoice-extractor="/path/to/renameInvoice/invoice_extractor_wrapper.sh"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+### Eroare "ModuleNotFoundError"
+
+```bash
+# Activează mediul virtual
+cd /path/to/renameInvoice
+source venv/bin/activate
+
+# Instalează dependențele
 pip install -r requirements.txt
 ```
 
-## Utilizare
+### Nu se găsesc PDF-uri
 
-### Comanda de bază
+- Verifică că folderul conține fișiere `.pdf`
+- Verifică că ai permisiuni de citire pentru folder
+- Folosește calea completă către folder
 
-```bash
-python pdf_renamer.py /path/to/folder
-```
+## 📝 Log-uri
 
-### Opțiuni disponibile
+Programul afișează informații detaliate despre:
+- Fișierele găsite și procesate
+- Datele extrase din fiecare PDF
+- Erorile întâlnite
+- Statisticile finale
 
-- `--pattern` sau `-p`: Pattern regex personalizat pentru a găsi valoarea în PDF
-- `--dry-run` sau `-d`: Testează fără să redenumească fișierele
+## 🎯 Caracteristici
 
-### Exemple
+- ✅ **Extragere automată** a datelor din PDF
+- ✅ **Export Excel formatat** cu header-uri colorate
+- ✅ **Funcționare din orice folder** prin alias
+- ✅ **Mod dry-run** pentru testare
+- ✅ **Logging detaliat** al procesului
+- ✅ **Gestionare erori** cu statistici
+- ✅ **Instalare automată** prin script
 
-1. **Procesează toate PDF-urile din folderul curent:**
-   ```bash
-   python pdf_renamer.py /Users/prundusdaniel/Documents/PDFs
-   ```
+## 📞 Suport
 
-2. **Folosește un pattern specific:**
-   ```bash
-   python pdf_renamer.py /Users/prundusdaniel/Documents/PDFs --pattern "FACTURA\\s*(\\d+)"
-   ```
+Pentru probleme sau întrebări:
+1. Verifică secțiunea Troubleshooting
+2. Rulează cu `--dry-run` pentru testare
+3. Verifică log-urile pentru detalii despre erori
 
-3. **Testează fără redenumire (dry run):**
-   ```bash
-   python pdf_renamer.py /Users/prundusdaniel/Documents/PDFs --dry-run
-   ```
+---
 
-4. **Caută numere de invoice în engleză:**
-   ```bash
-   python pdf_renamer.py /Users/prundusdaniel/Documents/PDFs --pattern "INVOICE\\s*NO\\.?\\s*(\\d+)"
-   ```
-
-## Pattern-uri utile
-
-Programul detectează automat următoarele formate:
-- `FACTURA 12345`
-- `INVOICE NO. 12345`
-- `FACTURA NR. 12345`
-- `INVOICE 12345`
-- Orice număr de cel puțin 4 cifre
-
-Pentru pattern-uri personalizate, folosește sintaxa regex:
-- `"FACTURA\\s*(\\d+)"` - pentru "FACTURA 12345"
-- `"INVOICE\\s*NO\\.?\\s*(\\d+)"` - pentru "INVOICE NO. 12345"
-- `"(\\d{4,})"` - pentru orice număr de cel puțin 4 cifre
-
-## Formatul de redenumire
-
-Fișierele sunt redenumite în formatul:
-```
-FACTURA_[numar].pdf
-```
-
-Exemple:
-- `document.pdf` → `FACTURA_12345.pdf`
-- `invoice_old.pdf` → `FACTURA_67890.pdf`
-
-## Siguranță
-
-- Programul verifică dacă fișierul de destinație există deja
-- Folosește modul dry-run pentru testare
-- Păstrează extensia originală a fișierului
-- Curăță numele fișierului de caractere invalide
-
-## Rezolvarea problemelor
-
-### Eroarea "Nu s-a putut extrage text din PDF"
-- PDF-ul poate fi protejat sau corupt
-- Încearcă să deschizi PDF-ul manual pentru a verifica
-
-### Eroarea "Nu s-a găsit valoarea în PDF"
-- PDF-ul nu conține numere de factură în formatul așteptat
-- Folosește un pattern personalizat cu `--pattern`
-
-### Eroarea "Fișierul există deja"
-- Un fișier cu același nume există deja
-- Verifică folderul pentru fișiere duplicate
-
-## Dependențe
-
-- `PyPDF2==3.0.1` - Pentru extragerea textului din PDF-uri
-- `PyMuPDF==1.23.8` - Pentru extragerea textului din PDF-uri complexe
-
-## Sistem de operare
-
-Programul funcționează pe:
-- macOS
-- Linux
-- Windows
-
-## Licență
-
-Programul este destinat utilizării personale.
+**Notă**: Programul este optimizat pentru facturi în format standard românesc și poate necesita ajustări pentru alte formate.
