@@ -1,4 +1,4 @@
-#!/bin/bash
+ignoram!/bin/bash
 
 # Invoice Data Extractor - Script de instalare
 # Acest script instalează programul pentru a fi folosit din orice folder
